@@ -112,25 +112,6 @@ export default function PlayPage() {
     setHasAnswered(false)
   }, [session?.current_question_idx, session?.status])
 
-  if (sessionQuery.isLoading) {
-    return (
-      <div className="mx-auto max-w-lg">
-        <Card className="glass-card rounded-3xl">
-          <CardHeader>
-            <CardTitle>Getting things ready…</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LoadingDots label="Joining session" />
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (!sessionQuery.data || !session) {
-    return <div className="text-muted-foreground">Game not found.</div>
-  }
-
   const submitNickname = async () => {
     if (nickname.trim().length < 2) return
     const trimmed = nickname.trim()
@@ -170,6 +151,25 @@ export default function PlayPage() {
     return Math.random() > 0.65 ? Math.floor(Math.random() * session.public_question.options.length) : null
   }, [session?.public_question?.question_id])
   const hintText = React.useMemo(() => playfulHints[Math.floor(Math.random() * playfulHints.length)], [hintIndex])
+
+  if (sessionQuery.isLoading) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <Card className="glass-card rounded-3xl">
+          <CardHeader>
+            <CardTitle>Getting things ready…</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LoadingDots label="Joining session" />
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!sessionQuery.data || !session) {
+    return <div className="text-muted-foreground">Game not found.</div>
+  }
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
