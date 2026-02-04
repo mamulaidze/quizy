@@ -1,13 +1,24 @@
 import React from 'react'
 
-export function Countdown({ startAt, limitSec }: { startAt: string | null; limitSec: number }) {
+export function Countdown({
+  startAt,
+  limitSec,
+  pausedAt,
+  pauseAccumMs = 0
+}: {
+  startAt: string | null
+  limitSec: number
+  pausedAt?: string | null
+  pauseAccumMs?: number
+}) {
   const [remaining, setRemaining] = React.useState(limitSec)
 
   React.useEffect(() => {
     if (!startAt) return
     const start = new Date(startAt).getTime()
     const tick = () => {
-      const elapsed = Date.now() - start
+      const now = pausedAt ? new Date(pausedAt).getTime() : Date.now()
+      const elapsed = now - start - pauseAccumMs
       const left = Math.max(0, limitSec - Math.floor(elapsed / 1000))
       setRemaining(left)
     }

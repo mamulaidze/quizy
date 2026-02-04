@@ -1,4 +1,5 @@
 import React from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -8,8 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabase'
 import { useSessionRealtime } from '@/hooks/useSessionRealtime'
-import type { Session } from '@/types/db'
+import type { Session, Team, Participant } from '@/types/db'
 import { toast } from 'sonner'
+import { LoadingDots } from '@/components/LoadingDots'
 
 export default function PlayPage() {
   const { code } = useParams()
@@ -18,6 +20,8 @@ export default function PlayPage() {
   const [participantId, setParticipantId] = React.useState<string | null>(null)
   const [joining, setJoining] = React.useState(false)
   const [hasAnswered, setHasAnswered] = React.useState(false)
+  const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null)
+  const reduceMotion = useReducedMotion()
 
   const sessionQuery = useQuery({
     queryKey: ['session', code],
@@ -31,12 +35,26 @@ export default function PlayPage() {
   const sessionId = sessionQuery.data?.id
   const { session, participants } = useSessionRealtime(sessionId, { includeAnswers: false })
 
+  const teamsQuery = useQuery({
+    queryKey: ['teams', sessionId],
+    enabled: !!sessionId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('teams').select('*').eq('session_id', sessionId)
+      if (error) throw error
+      return data as Team[]
+    }
+  })
+
   React.useEffect(() => {
     if (!sessionId || !code) return
     const storedNickname = localStorage.getItem(`nickname-${code}`)
     const storedParticipant = localStorage.getItem(`participant-${sessionId}`)
+    const storedTeam = localStorage.getItem(`team-${sessionId}`)
     if (storedParticipant) {
       setParticipantId(storedParticipant)
+    }
+    if (storedTeam) {
+      setSelectedTeamId(storedTeam)
     }
     if (storedNickname) {
       setNickname(storedNickname)
@@ -45,18 +63,48 @@ export default function PlayPage() {
 
   const joinSession = async () => {
     if (!sessionId || !nickname.trim() || participantId || joining) return
+    if (teamsQuery.data?.length && !selectedTeamId) {
+      toast.error('Pick a team first')
+      return
+    }
     setJoining(true)
+    const existing = await supabase
+      .from('participants')
+      .select('*')
+      .eq('session_id', sessionId)
+      .ilike('nickname', nickname.trim())
+      .limit(1)
+    if (existing.data && existing.data.length > 0) {
+      const found = existing.data[0] as Participant
+      localStorage.setItem(`participant-${sessionId}`, found.id)
+      setParticipantId(found.id)
+      setJoining(false)
+      return
+    }
+
     const { data, error } = await supabase
       .from('participants')
-      .insert({ session_id: sessionId, nickname: nickname.trim(), score: 0 })
+      .insert({
+        session_id: sessionId,
+        nickname: nickname.trim(),
+        score: 0,
+        team_id: selectedTeamId
+      })
       .select('*')
       .single()
     setJoining(false)
     if (error || !data) {
-      toast.error(error?.message ?? 'Unable to join session')
+      if (error?.message?.toLowerCase().includes('participants_unique_nickname_idx')) {
+        toast.error('Nickname already taken. Choose another.')
+      } else {
+        toast.error(error?.message ?? 'Unable to join session')
+      }
       return
     }
     localStorage.setItem(`participant-${sessionId}`, data.id)
+    if (selectedTeamId) {
+      localStorage.setItem(`team-${sessionId}`, selectedTeamId)
+    }
     setParticipantId(data.id)
   }
 
@@ -65,7 +113,18 @@ export default function PlayPage() {
   }, [session?.current_question_idx, session?.status])
 
   if (sessionQuery.isLoading) {
-    return <div className="text-muted-foreground">Loading session...</div>
+    return (
+      <div className="mx-auto max-w-lg">
+        <Card className="glass-card rounded-3xl">
+          <CardHeader>
+            <CardTitle>Getting things ready…</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LoadingDots label="Joining session" />
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   if (!sessionQuery.data || !session) {
@@ -97,91 +156,152 @@ export default function PlayPage() {
     setHasAnswered(true)
   }
 
+  const optionColors = [
+    'from-purple-500/80 to-indigo-500/80',
+    'from-sky-500/80 to-cyan-500/80',
+    'from-emerald-500/80 to-lime-500/80',
+    'from-orange-500/80 to-amber-500/80',
+    'from-pink-500/80 to-fuchsia-500/80'
+  ]
+
+  const playfulHints = ['👀 maybe this?', 'hmm… looks right?', '👆 feels correct?']
+  const hintIndex = React.useMemo(() => {
+    if (!session?.public_question) return null
+    return Math.random() > 0.65 ? Math.floor(Math.random() * session.public_question.options.length) : null
+  }, [session?.public_question?.question_id])
+  const hintText = React.useMemo(() => playfulHints[Math.floor(Math.random() * playfulHints.length)], [hintIndex])
+
   return (
     <div className="mx-auto max-w-lg space-y-4">
       {(!nickname || !participantId) && (
-        <Card>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="glass-card rounded-3xl">
           <CardHeader>
             <CardTitle>Choose a nickname</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <Label htmlFor="nickname">Nickname</Label>
             <Input id="nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} />
+            {teamsQuery.data && teamsQuery.data.length > 0 && (
+              <div className="space-y-2">
+                <Label>Pick a team</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {teamsQuery.data.map((team) => (
+                    <button
+                      key={team.id}
+                      type="button"
+                      className={`rounded-2xl border px-3 py-2 text-sm font-semibold text-white shadow ${
+                        selectedTeamId === team.id ? 'glow-ring' : 'border-white/10'
+                      } bg-gradient-to-br ${team.color}`}
+                      onClick={() => setSelectedTeamId(team.id)}
+                    >
+                      {team.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <Button className="w-full" onClick={submitNickname} disabled={joining}>
               {joining ? 'Joining...' : 'Join lobby'}
             </Button>
           </CardContent>
         </Card>
+        </motion.div>
       )}
 
       {nickname && participantId && session.status === 'lobby' && (
-        <Card>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="glass-card rounded-3xl">
           <CardHeader>
             <CardTitle>Waiting for host</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-muted-foreground">Share this code with friends.</p>
+            <p className="text-muted-foreground">Waiting for others 👀</p>
             <div className="text-3xl font-bold tracking-widest">{session.code}</div>
             <div className="flex flex-wrap gap-2">
               {participants.map((p) => (
                 <Badge key={p.id}>{p.nickname}</Badge>
               ))}
             </div>
+            <LoadingDots label="Get ready…" />
           </CardContent>
         </Card>
+        </motion.div>
       )}
 
       {nickname && participantId && session.status === 'question' && session.public_question && (
-        <Card>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="glass-card rounded-3xl">
           <CardHeader>
             <CardTitle>{session.public_question.prompt}</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-3">
-            {session.public_question.options.map((opt, idx) => (
-              <Button
-                key={idx}
-                size="xl"
-                variant={hasAnswered ? 'outline' : 'default'}
-                className="h-auto justify-start py-4"
-                onClick={() => submitAnswer(idx)}
-                disabled={hasAnswered}
-              >
-                {opt}
-              </Button>
-            ))}
+          <CardContent className="grid gap-3 pb-6">
+            <div className="grid gap-3">
+              {session.public_question.options.map((opt, idx) => {
+                const gradient = optionColors[idx % optionColors.length]
+                const showHint = hintIndex === idx
+                return (
+                  <motion.button
+                    key={idx}
+                    whileHover={reduceMotion ? {} : { scale: 1.03 }}
+                    whileTap={reduceMotion ? {} : { scale: 0.97 }}
+                    className={`answer-btn relative flex h-auto w-full items-center justify-start rounded-2xl bg-gradient-to-br ${gradient} px-5 py-4 text-left text-base font-semibold text-white shadow-lg ${
+                      hasAnswered ? 'answer-locked' : ''
+                    }`}
+                    onClick={() => submitAnswer(idx)}
+                    disabled={hasAnswered}
+                  >
+                    {opt}
+                    {showHint && !hasAnswered && (
+                      <span className="absolute right-4 top-3 text-sm text-white/90">{hintText}</span>
+                    )}
+                  </motion.button>
+                )
+              })}
+            </div>
             {hasAnswered && (
-              <p className="text-center text-sm text-muted-foreground">Answer submitted. Waiting for results.</p>
+              <p className="text-center text-sm text-muted-foreground">Nice choice 😎 Waiting for results…</p>
             )}
           </CardContent>
         </Card>
+        </motion.div>
       )}
 
       {nickname && participantId && session.status === 'results' && (
-        <Card>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="glass-card rounded-3xl">
           <CardHeader>
             <CardTitle>Results</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-muted-foreground">Scores update live after each question.</p>
-            <div className="space-y-2">
+            <motion.div layout className="space-y-2">
               {[...participants]
                 .sort((a, b) => b.score - a.score)
                 .slice(0, 10)
                 .map((p, idx) => (
-                  <div key={p.id} className="flex items-center justify-between rounded-md border p-3">
+                  <motion.div
+                    layout
+                    key={p.id}
+                    className={`flex items-center justify-between rounded-xl border border-white/10 p-3 ${
+                      p.id === participantId ? 'glow-ring' : ''
+                    }`}
+                  >
                     <span>
                       {idx + 1}. {p.nickname}
                     </span>
                     <span className="font-semibold">{p.score}</span>
-                  </div>
+                  </motion.div>
                 ))}
-            </div>
+            </motion.div>
           </CardContent>
         </Card>
+        </motion.div>
       )}
 
       {nickname && participantId && session.status === 'ended' && (
-        <Card>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="glass-card rounded-3xl">
           <CardHeader>
             <CardTitle>Game over</CardTitle>
           </CardHeader>
@@ -192,6 +312,7 @@ export default function PlayPage() {
             </Button>
           </CardContent>
         </Card>
+        </motion.div>
       )}
     </div>
   )

@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -32,7 +33,8 @@ export default function ForgotPage() {
 
   return (
     <div className="mx-auto max-w-md">
-      <Card>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <Card className="glass-card rounded-3xl">
         <CardHeader>
           <CardTitle>Reset password</CardTitle>
         </CardHeader>
@@ -56,6 +58,7 @@ export default function ForgotPage() {
           </div>
         </CardContent>
       </Card>
+      </motion.div>
     </div>
   )
 }

@@ -15,13 +15,15 @@ const queryClient = new QueryClient({
   }
 })
 
+const Root = import.meta.env.DEV ? React.Fragment : React.StrictMode
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
+  <Root>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <App />
       </BrowserRouter>
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
-  </React.StrictMode>
+  </Root>
 )

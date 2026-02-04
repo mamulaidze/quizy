@@ -29,7 +29,15 @@ const quizSchema = z.object({
 
 export type QuizFormValues = z.infer<typeof quizSchema>
 
-export default function QuizEditor({ quiz, questions }: { quiz?: Quiz; questions?: Question[] }) {
+export default function QuizEditor({
+  quiz,
+  questions,
+  onCreated
+}: {
+  quiz?: Quiz
+  questions?: Question[]
+  onCreated?: (quizId: string) => void
+}) {
   const { user } = useAuth()
   const form = useForm<QuizFormValues>({
     resolver: zodResolver(quizSchema),
@@ -129,6 +137,7 @@ export default function QuizEditor({ quiz, questions }: { quiz?: Quiz; questions
       }))
       await supabase.from('questions').insert(payload)
       toast.success('Quiz created')
+      onCreated?.(data.id)
     } else {
       toast.success('Changes saved')
     }
@@ -170,14 +179,7 @@ export default function QuizEditor({ quiz, questions }: { quiz?: Quiz; questions
               <div className="space-y-2">
                 {form.watch(`questions.${index}.options`).map((_, optionIndex) => (
                   <div key={optionIndex} className="flex gap-2">
-                    <Input
-                      value={form.watch(`questions.${index}.options.${optionIndex}`)}
-                      onChange={(event) => {
-                        const options = [...form.getValues(`questions.${index}.options`)]
-                        options[optionIndex] = event.target.value
-                        update(index, { ...form.getValues(`questions.${index}`), options })
-                      }}
-                    />
+                    <Input {...form.register(`questions.${index}.options.${optionIndex}` as const)} />
                     <Button
                       type="button"
                       variant={form.watch(`questions.${index}.correct_index`) === optionIndex ? 'default' : 'outline'}
@@ -196,7 +198,11 @@ export default function QuizEditor({ quiz, questions }: { quiz?: Quiz; questions
                         variant="ghost"
                         onClick={() => {
                           const options = form.getValues(`questions.${index}.options`).filter((_, i) => i !== optionIndex)
-                          update(index, { ...form.getValues(`questions.${index}`), options })
+                          form.setValue(`questions.${index}.options`, options, { shouldDirty: true })
+                          const currentCorrect = form.getValues(`questions.${index}.correct_index`)
+                          if (currentCorrect >= options.length) {
+                            form.setValue(`questions.${index}.correct_index`, 0, { shouldDirty: true })
+                          }
                         }}
                       >
                         Remove
@@ -210,7 +216,7 @@ export default function QuizEditor({ quiz, questions }: { quiz?: Quiz; questions
                     variant="secondary"
                     onClick={() => {
                       const options = [...form.getValues(`questions.${index}.options`), '']
-                      update(index, { ...form.getValues(`questions.${index}`), options })
+                      form.setValue(`questions.${index}.options`, options, { shouldDirty: true })
                     }}
                   >
                     Add option
@@ -225,13 +231,7 @@ export default function QuizEditor({ quiz, questions }: { quiz?: Quiz; questions
                   type="number"
                   min={5}
                   max={60}
-                  value={form.watch(`questions.${index}.time_limit_sec`)}
-                  onChange={(event) =>
-                    update(index, {
-                      ...form.getValues(`questions.${index}`),
-                      time_limit_sec: Number(event.target.value)
-                    })
-                  }
+                  {...form.register(`questions.${index}.time_limit_sec` as const, { valueAsNumber: true })}
                 />
               </div>
               <div className="flex items-end">

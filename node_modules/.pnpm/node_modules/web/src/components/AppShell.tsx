@@ -17,8 +17,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
+    <div className={`min-h-screen text-foreground ${theme === 'dark' ? 'bg-mesh' : 'bg-mesh-light'}`}>
+      <div className={`pointer-events-none fixed inset-0 ${theme === 'dark' ? 'noise' : ''}`} />
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-background/40 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4">
           <Link to="/" className="text-lg font-bold tracking-tight">
             QuizLive
@@ -65,7 +66,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl px-4 py-8">{children}</main>
+      <main className="relative mx-auto w-full max-w-6xl px-4 py-8">{children}</main>
     </div>
   )
 }

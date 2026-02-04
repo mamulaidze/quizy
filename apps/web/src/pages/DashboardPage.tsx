@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth'
 import { toast } from 'sonner'
 import type { Quiz } from '@/types/db'
 import React from 'react'
+import { motion } from 'framer-motion'
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -44,7 +45,11 @@ export default function DashboardPage() {
         status: 'lobby',
         current_question_idx: 0,
         question_started_at: null,
-        public_question: null
+        public_question: null,
+        locked: false,
+        auto_advance_sec: 5,
+        pause_accumulated_ms: 0,
+        paused_at: null
       })
       .select('*')
       .single()
@@ -53,6 +58,14 @@ export default function DashboardPage() {
       toast.error(error?.message ?? 'Failed to start session')
       return
     }
+
+    const teams = [
+      { session_id: data.id, name: 'Red Rockets', color: 'from-rose-500 to-red-500' },
+      { session_id: data.id, name: 'Blue Blasters', color: 'from-sky-500 to-blue-500' },
+      { session_id: data.id, name: 'Green Sparks', color: 'from-emerald-500 to-lime-500' },
+      { session_id: data.id, name: 'Purple Pulse', color: 'from-violet-500 to-fuchsia-500' }
+    ]
+    await supabase.from('teams').insert(teams)
     navigate(`/host/${data.code}`)
   }
 
@@ -105,7 +118,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold">Your quizzes</h1>
@@ -129,7 +142,7 @@ export default function DashboardPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {filtered.map((quiz) => (
-            <Card key={quiz.id}>
+            <Card key={quiz.id} className="glass-card rounded-3xl">
               <CardHeader>
                 <CardTitle>{quiz.title}</CardTitle>
               </CardHeader>
@@ -154,6 +167,6 @@ export default function DashboardPage() {
           ))}
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }

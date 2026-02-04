@@ -26,7 +26,12 @@ export type Session = {
   status: 'lobby' | 'question' | 'results' | 'ended'
   current_question_idx: number
   question_started_at: string | null
+  paused_at: string | null
+  pause_accumulated_ms: number
+  locked: boolean
+  auto_advance_sec: number
   public_question: PublicQuestion | null
+  ended_at: string | null
   created_at: string
 }
 
@@ -40,6 +45,7 @@ export type PublicQuestion = {
 export type Participant = {
   id: string
   session_id: string
+  team_id: string | null
   nickname: string
   score: number
   created_at: string
@@ -53,5 +59,13 @@ export type Answer = {
   selected_index: number
   is_correct: boolean
   awarded_points: number
+  created_at: string
+}
+
+export type Team = {
+  id: string
+  session_id: string
+  name: string
+  color: string
   created_at: string
 }

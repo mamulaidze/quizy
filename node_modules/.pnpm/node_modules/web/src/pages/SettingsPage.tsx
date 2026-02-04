@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 
 export default function SettingsPage() {
   const { user } = useAuth()
@@ -15,7 +16,8 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <Card>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <Card className="glass-card rounded-3xl">
         <CardHeader>
           <CardTitle>Profile settings</CardTitle>
         </CardHeader>
@@ -29,6 +31,7 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+      </motion.div>
     </div>
   )
 }

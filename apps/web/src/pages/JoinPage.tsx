@@ -1,4 +1,5 @@
 import { useForm } from 'react-hook-form'
+import { motion } from 'framer-motion'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from 'react-router-dom'
@@ -29,7 +30,8 @@ export default function JoinPage() {
 
   return (
     <div className="mx-auto max-w-lg">
-      <Card>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <Card className="glass-card rounded-3xl">
         <CardHeader>
           <CardTitle>Join a live quiz</CardTitle>
         </CardHeader>
@@ -55,6 +57,7 @@ export default function JoinPage() {
           </form>
         </CardContent>
       </Card>
+      </motion.div>
     </div>
   )
 }
