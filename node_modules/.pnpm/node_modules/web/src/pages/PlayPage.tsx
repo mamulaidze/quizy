@@ -16,6 +16,7 @@ export default function PlayPage() {
   const navigate = useNavigate()
   const [nickname, setNickname] = React.useState('')
   const [participantId, setParticipantId] = React.useState<string | null>(null)
+  const [joining, setJoining] = React.useState(false)
   const [hasAnswered, setHasAnswered] = React.useState(false)
 
   const sessionQuery = useQuery({
@@ -42,23 +43,22 @@ export default function PlayPage() {
     }
   }, [sessionId, code])
 
-  React.useEffect(() => {
-    if (!sessionId || !nickname || participantId) return
-    const join = async () => {
-      const { data, error } = await supabase
-        .from('participants')
-        .insert({ session_id: sessionId, nickname, score: 0 })
-        .select('*')
-        .single()
-      if (error || !data) {
-        toast.error(error?.message ?? 'Unable to join session')
-        return
-      }
-      localStorage.setItem(`participant-${sessionId}`, data.id)
-      setParticipantId(data.id)
+  const joinSession = async () => {
+    if (!sessionId || !nickname.trim() || participantId || joining) return
+    setJoining(true)
+    const { data, error } = await supabase
+      .from('participants')
+      .insert({ session_id: sessionId, nickname: nickname.trim(), score: 0 })
+      .select('*')
+      .single()
+    setJoining(false)
+    if (error || !data) {
+      toast.error(error?.message ?? 'Unable to join session')
+      return
     }
-    join()
-  }, [sessionId, nickname, participantId])
+    localStorage.setItem(`participant-${sessionId}`, data.id)
+    setParticipantId(data.id)
+  }
 
   React.useEffect(() => {
     setHasAnswered(false)
@@ -72,10 +72,12 @@ export default function PlayPage() {
     return <div className="text-muted-foreground">Game not found.</div>
   }
 
-  const submitNickname = () => {
+  const submitNickname = async () => {
     if (nickname.trim().length < 2) return
-    localStorage.setItem(`nickname-${code}`, nickname.trim())
-    setNickname(nickname.trim())
+    const trimmed = nickname.trim()
+    localStorage.setItem(`nickname-${code}`, trimmed)
+    setNickname(trimmed)
+    await joinSession()
   }
 
   const submitAnswer = async (index: number) => {
@@ -105,8 +107,8 @@ export default function PlayPage() {
           <CardContent className="space-y-3">
             <Label htmlFor="nickname">Nickname</Label>
             <Input id="nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} />
-            <Button className="w-full" onClick={submitNickname}>
-              Join lobby
+            <Button className="w-full" onClick={submitNickname} disabled={joining}>
+              {joining ? 'Joining...' : 'Join lobby'}
             </Button>
           </CardContent>
         </Card>
