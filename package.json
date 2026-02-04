@@ -1,0 +1,7 @@
+{
+  "name": "quizlive-root",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter ./apps/web dev"
+  }
+}
