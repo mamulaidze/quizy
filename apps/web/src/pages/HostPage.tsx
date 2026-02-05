@@ -14,6 +14,7 @@ import type { Question, Session, Team } from '@/types/db'
 import { calculateScore } from '@/lib/scoring'
 import { toast } from 'sonner'
 import { LoadingDots } from '@/components/LoadingDots'
+import { AlertBanner } from '@/components/AlertBanner'
 import { SparkleBurst } from '@/components/SparkleBurst'
 
 export default function HostPage() {
@@ -79,7 +80,11 @@ export default function HostPage() {
   }
 
   if (!sessionQuery.data || !session) {
-    return <div className="text-muted-foreground">Session not found.</div>
+    return (
+      <div className="mx-auto max-w-lg">
+        <AlertBanner title="Session not found" description="Return to dashboard to start a new session." variant="info" />
+      </div>
+    )
   }
 
   const questions = questionsQuery.data ?? []
@@ -257,6 +262,9 @@ export default function HostPage() {
   }
 
   const leaderboard = [...participants].sort((a, b) => b.score - a.score).slice(0, 10)
+  const ranked = [...participants]
+    .sort((a, b) => b.score - a.score)
+    .map((p, idx) => ({ ...p, rank: idx + 1 }))
   const teamLeaderboard = teams
     .map((team) => ({
       ...team,
@@ -272,6 +280,7 @@ export default function HostPage() {
   const totalAnswers = currentQuestion
     ? answers.filter((a) => a.question_id === currentQuestion.id).length
     : 0
+  const timeEnded = currentQuestion ? getElapsedMs() >= currentQuestion.time_limit_sec * 1000 : false
   const averageResponseMs = currentQuestion
     ? (() => {
         const relevant = answers.filter((a) => a.question_id === currentQuestion.id)
@@ -282,6 +291,20 @@ export default function HostPage() {
         return Math.max(0, Math.round(sum / relevant.length))
       })()
     : null
+
+  const prevRanksRef = React.useRef<Record<string, number>>({})
+  const rankedWithDelta = React.useMemo(() => {
+    const next = ranked.map((p) => {
+      const prevRank = prevRanksRef.current[p.id]
+      const delta = prevRank ? prevRank - p.rank : 0
+      return { ...p, delta }
+    })
+    prevRanksRef.current = ranked.reduce<Record<string, number>>((acc, p) => {
+      acc[p.id] = p.rank
+      return acc
+    }, {})
+    return next
+  }, [ranked])
 
   return (
     <div className="space-y-6">
@@ -368,6 +391,11 @@ export default function HostPage() {
                 </span>
               </div>
             </div>
+            {participants.length === 0 && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-muted-foreground">
+                No participants yet. Share the code or QR to get players in.
+              </div>
+            )}
             <div className="grid gap-3 md:grid-cols-2">
               {currentQuestion.options.map((opt, idx) => (
                 <Card
@@ -379,7 +407,9 @@ export default function HostPage() {
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={showResults}>Show results</Button>
+              <Button onClick={showResults} disabled={!timeEnded && totalAnswers === 0}>
+                Show results
+              </Button>
               {session.paused_at ? (
                 <Button variant="secondary" onClick={resumeTimer}>
                   Resume timer
@@ -422,6 +452,11 @@ export default function HostPage() {
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">Answer distribution</p>
                 <div className="space-y-2">
+                  {answers.filter((a) => a.question_id === currentQuestion.id).length === 0 && (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-muted-foreground">
+                      No answers yet. Waiting for players…
+                    </div>
+                  )}
                   {currentQuestion.options.map((opt, idx) => {
                     const count = answerCounts[idx] ?? 0
                     const total = Math.max(1, answers.filter((a) => a.question_id === currentQuestion.id).length)
@@ -444,16 +479,19 @@ export default function HostPage() {
             <div>
               <p className="text-sm text-muted-foreground">Leaderboard</p>
               <motion.div layout className="space-y-2">
-                {leaderboard.map((p, idx) => (
+                {rankedWithDelta.slice(0, 10).map((p) => (
                   <motion.div
                     layout
                     key={p.id}
                     className={`flex items-center justify-between rounded-xl border border-white/10 p-3 ${
-                      idx === 0 ? 'glow-ring' : ''
+                      p.rank === 1 ? 'glow-ring' : ''
                     }`}
                   >
                     <span>
-                      {idx + 1}. {p.nickname}
+                      {p.rank}. {p.nickname}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {p.delta > 0 ? `▲ +${p.delta}` : p.delta < 0 ? `▼ ${p.delta}` : '•'}
                     </span>
                     <span className="font-semibold">{p.score}</span>
                   </motion.div>
@@ -495,10 +533,10 @@ export default function HostPage() {
           <CardContent>
             <p className="text-muted-foreground">Thanks for hosting! Final leaderboard:</p>
             <div className="mt-4 space-y-2">
-              {leaderboard.map((p, idx) => (
+              {ranked.map((p) => (
                 <div key={p.id} className="flex items-center justify-between rounded-xl border border-white/10 p-3">
                   <span>
-                    {idx + 1}. {p.nickname}
+                    {p.rank}. {p.nickname}
                   </span>
                   <span className="font-semibold">{p.score}</span>
                 </div>

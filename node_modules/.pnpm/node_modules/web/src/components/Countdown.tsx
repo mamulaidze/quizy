@@ -27,9 +27,11 @@ export function Countdown({
     return () => window.clearInterval(id)
   }, [startAt, limitSec])
 
+  const low = remaining <= 5
+
   return (
     <div className="flex items-center gap-2 text-sm">
-      <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
+      <div className={`h-2 w-24 overflow-hidden rounded-full bg-muted ${low ? 'pulse-warning' : ''}`}>
         <div
           className="h-full bg-primary transition-all"
           style={{ width: `${(remaining / limitSec) * 100}%` }}

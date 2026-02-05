@@ -10,6 +10,8 @@ import { toast } from 'sonner'
 import type { Quiz } from '@/types/db'
 import React from 'react'
 import { motion } from 'framer-motion'
+import { LoadingDots } from '@/components/LoadingDots'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -138,7 +140,16 @@ export default function DashboardPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-muted-foreground">Loading...</div>
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <LoadingDots label="Loading your quizzes" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          title="No quizzes yet"
+          description="Create your first quiz and start a live session."
+          actionLabel="Create quiz"
+          onAction={() => navigate('/quizzes/new')}
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {filtered.map((quiz) => (

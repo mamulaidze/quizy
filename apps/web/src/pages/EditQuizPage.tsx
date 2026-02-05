@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import QuizEditor from '@/components/QuizEditor'
 import { supabase } from '@/lib/supabase'
 import type { Quiz, Question } from '@/types/db'
+import { LoadingDots } from '@/components/LoadingDots'
 
 export default function EditQuizPage() {
   const { id } = useParams()
@@ -25,7 +26,11 @@ export default function EditQuizPage() {
   })
 
   if (isLoading || !data) {
-    return <div className="text-muted-foreground">Loading quiz...</div>
+    return (
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <LoadingDots label="Loading quiz" />
+      </div>
+    )
   }
 
   return (

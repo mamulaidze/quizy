@@ -12,6 +12,7 @@ import { useSessionRealtime } from '@/hooks/useSessionRealtime'
 import type { Session, Team, Participant } from '@/types/db'
 import { toast } from 'sonner'
 import { LoadingDots } from '@/components/LoadingDots'
+import { AlertBanner } from '@/components/AlertBanner'
 
 export default function PlayPage() {
   const { code } = useParams()
@@ -152,6 +153,25 @@ export default function PlayPage() {
   }, [session?.public_question?.question_id])
   const hintText = React.useMemo(() => playfulHints[Math.floor(Math.random() * playfulHints.length)], [hintIndex])
 
+  const sortedParticipants = React.useMemo(() => {
+    return [...participants].sort((a, b) => b.score - a.score)
+  }, [participants])
+
+  const prevRanksRef = React.useRef<Record<string, number>>({})
+  const rankedWithDelta = React.useMemo(() => {
+    const next = sortedParticipants.map((p, idx) => {
+      const rank = idx + 1
+      const prevRank = prevRanksRef.current[p.id]
+      const delta = prevRank ? prevRank - rank : 0
+      return { ...p, rank, delta }
+    })
+    prevRanksRef.current = next.reduce<Record<string, number>>((acc, p) => {
+      acc[p.id] = p.rank
+      return acc
+    }, {})
+    return next
+  }, [sortedParticipants])
+
   if (sessionQuery.isLoading) {
     return (
       <div className="mx-auto max-w-lg">
@@ -167,8 +187,38 @@ export default function PlayPage() {
     )
   }
 
+  if (sessionQuery.isError) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <AlertBanner
+          title="Could not join"
+          description="We hit an error loading this session. Please try again."
+          variant="error"
+        />
+        <div className="mt-4">
+          <Button variant="secondary" onClick={() => window.location.reload()}>
+            Try again
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   if (!sessionQuery.data || !session) {
-    return <div className="text-muted-foreground">Game not found.</div>
+    return (
+      <div className="mx-auto max-w-lg">
+        <AlertBanner
+          title="Game not found"
+          description="Double-check the code and try again."
+          variant="info"
+        />
+        <div className="mt-4">
+          <Button variant="secondary" onClick={() => navigate('/join')}>
+            Back to join
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -236,7 +286,7 @@ export default function PlayPage() {
             <CardTitle>{session.public_question.prompt}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 pb-6">
-            <div className="grid gap-3">
+            <div className="grid gap-3 md:static md:pb-0 sticky bottom-4 z-10 rounded-3xl border border-white/10 bg-black/30 p-3 backdrop-blur">
               {session.public_question.options.map((opt, idx) => {
                 const gradient = optionColors[idx % optionColors.length]
                 const showHint = hintIndex === idx
@@ -276,23 +326,23 @@ export default function PlayPage() {
           <CardContent className="space-y-2">
             <p className="text-muted-foreground">Scores update live after each question.</p>
             <motion.div layout className="space-y-2">
-              {[...participants]
-                .sort((a, b) => b.score - a.score)
-                .slice(0, 10)
-                .map((p, idx) => (
-                  <motion.div
-                    layout
-                    key={p.id}
-                    className={`flex items-center justify-between rounded-xl border border-white/10 p-3 ${
-                      p.id === participantId ? 'glow-ring' : ''
-                    }`}
-                  >
-                    <span>
-                      {idx + 1}. {p.nickname}
-                    </span>
-                    <span className="font-semibold">{p.score}</span>
-                  </motion.div>
-                ))}
+              {rankedWithDelta.slice(0, 10).map((p) => (
+                <motion.div
+                  layout
+                  key={p.id}
+                  className={`flex items-center justify-between rounded-xl border border-white/10 p-3 ${
+                    p.id === participantId ? 'glow-ring' : ''
+                  }`}
+                >
+                  <span>
+                    {p.rank}. {p.nickname}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {p.delta > 0 ? `▲ +${p.delta}` : p.delta < 0 ? `▼ ${p.delta}` : '•'}
+                  </span>
+                  <span className="font-semibold">{p.score}</span>
+                </motion.div>
+              ))}
             </motion.div>
           </CardContent>
         </Card>
@@ -307,6 +357,18 @@ export default function PlayPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-muted-foreground">Thanks for playing!</p>
+            <div className="space-y-2">
+              {[...participants]
+                .sort((a, b) => b.score - a.score)
+                .map((p, idx) => (
+                  <div key={p.id} className={`flex items-center justify-between rounded-xl border border-white/10 p-3 ${p.id === participantId ? 'glow-ring' : ''}`}>
+                    <span>
+                      {idx + 1}. {p.nickname}
+                    </span>
+                    <span className="font-semibold">{p.score}</span>
+                  </div>
+                ))}
+            </div>
             <Button variant="secondary" onClick={() => navigate('/join')}>
               Join another game
             </Button>
