@@ -3,8 +3,13 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { useAuth } from '@/lib/auth'
+import { useI18n } from '@/lib/i18n'
 
 export default function LandingPage() {
+  const { user } = useAuth()
+  const { t } = useI18n()
+
   return (
     <div className="hero-gradient rounded-3xl border border-white/10 p-6 md:p-12">
       <div className="grid gap-8 md:grid-cols-[1.2fr,0.8fr]">
@@ -14,19 +19,19 @@ export default function LandingPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <Badge>Live Quiz Platform</Badge>
-          <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
-            Host real-time quiz battles with live leaderboards and lightning-fast play.
+          <Badge>{t('landing_tagline')}</Badge>
+          <h1 className="text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">
+            {t('landing_title')}
           </h1>
           <p className="text-muted-foreground">
-            QuizLive lets creators craft quizzes, launch live sessions, and let anyone join instantly on their phone.
+            {t('landing_subtitle')}
           </p>
           <div className="flex flex-wrap gap-3">
             <Button asChild size="lg">
-              <Link to="/join">Join a Game</Link>
+              <Link to="/join">{t('landing_join')}</Link>
             </Button>
             <Button asChild variant="outline" size="lg">
-              <Link to="/dashboard">Create a Quiz</Link>
+              <Link to="/dashboard">{t('landing_create')}</Link>
             </Button>
           </div>
         </motion.div>
@@ -38,17 +43,23 @@ export default function LandingPage() {
         <Card className="glass-card rounded-3xl">
           <CardContent className="space-y-4 p-6">
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">How it works</p>
-              <h2 className="text-2xl font-semibold">Spin up a session in seconds</h2>
+              <p className="text-sm text-muted-foreground">{t('landing_how')}</p>
+              <h2 className="text-xl font-semibold sm:text-2xl">{t('landing_how_title')}</h2>
             </div>
             <ul className="space-y-3 text-sm text-muted-foreground">
-              <li>1. Create a quiz with time-based questions.</li>
-              <li>2. Start a live session and share the join code.</li>
-              <li>3. Players answer on their phones and watch the leaderboard climb.</li>
+              <li>{t('landing_step1')}</li>
+              <li>{t('landing_step2')}</li>
+              <li>{t('landing_step3')}</li>
             </ul>
-            <Button asChild variant="secondary" className="w-full">
-              <Link to="/auth/register">Get Started</Link>
-            </Button>
+            {user ? (
+              <Button asChild variant="secondary" className="w-full">
+                <Link to="/dashboard">{t('landing_dashboard')}</Link>
+              </Button>
+            ) : (
+              <Button asChild variant="secondary" className="w-full">
+                <Link to="/auth/register">{t('landing_get_started')}</Link>
+              </Button>
+            )}
           </CardContent>
         </Card>
         </motion.div>

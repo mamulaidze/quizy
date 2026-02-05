@@ -4,6 +4,8 @@ export type Quiz = {
   title: string
   description: string | null
   cover_url: string | null
+  teams_config: { name: string; color: string }[] | null
+  team_max_members: number | null
   created_at: string
 }
 
@@ -30,6 +32,7 @@ export type Session = {
   pause_accumulated_ms: number
   locked: boolean
   auto_advance_sec: number
+  team_max_members: number | null
   public_question: PublicQuestion | null
   ended_at: string | null
   created_at: string

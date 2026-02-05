@@ -6,6 +6,14 @@ create table if not exists quizzes (
   title text not null,
   description text,
   cover_url text,
+  teams_config jsonb,
+  team_max_members int,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  language text not null default 'en',
   created_at timestamptz not null default now()
 );
 
@@ -32,6 +40,7 @@ create table if not exists sessions (
   pause_accumulated_ms int not null default 0,
   locked boolean not null default false,
   auto_advance_sec int not null default 0,
+  team_max_members int,
   public_question jsonb,
   ended_at timestamptz,
   created_at timestamptz not null default now()
@@ -83,6 +92,7 @@ create index if not exists teams_session_idx on teams(session_id);
 create index if not exists session_results_session_idx on session_results(session_id);
 
 alter table quizzes enable row level security;
+alter table profiles enable row level security;
 alter table questions enable row level security;
 alter table sessions enable row level security;
 alter table teams enable row level security;
@@ -102,6 +112,16 @@ create policy "quiz_owner_update" on quizzes
 
 create policy "quiz_owner_delete" on quizzes
   for delete using (owner_id = auth.uid());
+
+-- Profiles policies
+create policy "profile_owner_select" on profiles
+  for select using (id = auth.uid());
+
+create policy "profile_owner_insert" on profiles
+  for insert with check (id = auth.uid());
+
+create policy "profile_owner_update" on profiles
+  for update using (id = auth.uid());
 
 -- Questions policies
 create policy "question_owner_select" on questions
@@ -156,6 +176,35 @@ create policy "participant_public_insert" on participants
   for insert with check (
     exists (select 1 from sessions s where s.id = participants.session_id and s.status <> 'ended')
   );
+
+create or replace function join_team(p_session_id uuid, p_nickname text, p_team_id uuid)
+returns participants
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  max_members int;
+  team_count int;
+  inserted participants;
+begin
+  select team_max_members into max_members from sessions where id = p_session_id;
+  if max_members is not null and p_team_id is not null then
+    select count(*) into team_count from participants where session_id = p_session_id and team_id = p_team_id;
+    if team_count >= max_members then
+      raise exception 'team_full';
+    end if;
+  end if;
+
+  insert into participants (session_id, team_id, nickname, score)
+  values (p_session_id, p_team_id, p_nickname, 0)
+  returning * into inserted;
+
+  return inserted;
+end;
+$$;
+
+grant execute on function join_team(uuid, text, uuid) to anon, authenticated;
 
 create policy "participant_public_select" on participants
   for select using (

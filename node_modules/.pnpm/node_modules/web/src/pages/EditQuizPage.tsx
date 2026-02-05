@@ -4,9 +4,11 @@ import QuizEditor from '@/components/QuizEditor'
 import { supabase } from '@/lib/supabase'
 import type { Quiz, Question } from '@/types/db'
 import { LoadingDots } from '@/components/LoadingDots'
+import { useI18n } from '@/lib/i18n'
 
 export default function EditQuizPage() {
   const { id } = useParams()
+  const { t } = useI18n()
 
   const { data, isLoading } = useQuery({
     queryKey: ['quiz', id],
@@ -28,7 +30,7 @@ export default function EditQuizPage() {
   if (isLoading || !data) {
     return (
       <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <LoadingDots label="Loading quiz" />
+        <LoadingDots label={t('loading_quizzes')} />
       </div>
     )
   }
@@ -36,8 +38,8 @@ export default function EditQuizPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-3xl font-semibold">Edit quiz</h1>
-        <p className="text-muted-foreground">Changes are autosaved.</p>
+        <h1 className="text-2xl font-semibold sm:text-3xl">{t('quiz_edit')}</h1>
+        <p className="text-muted-foreground">{t('quiz_autosaved')}</p>
       </div>
       <QuizEditor quiz={data.quiz} questions={data.questions} />
     </div>

@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/auth'
 import { toast } from 'sonner'
 import type { Quiz, Question } from '@/types/db'
 import { useDebounce } from '@/hooks/useDebounce'
+import { useI18n } from '@/lib/i18n'
 
 const questionSchema = z.object({
   id: z.string().optional(),
@@ -38,6 +39,7 @@ export default function QuizEditor({
   questions?: Question[]
   onCreated?: (quizId: string) => void
 }) {
+  const { t } = useI18n()
   const { user } = useAuth()
   const form = useForm<QuizFormValues>({
     resolver: zodResolver(quizSchema),
@@ -147,18 +149,18 @@ export default function QuizEditor({
     <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
       <Card>
         <CardHeader>
-          <CardTitle>Quiz details</CardTitle>
+          <CardTitle>{t('quiz_details')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="title">{t('quiz_title')}</Label>
             <Input id="title" {...form.register('title')} />
             {form.formState.errors.title && (
               <p className="text-sm text-destructive">{form.formState.errors.title.message}</p>
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">{t('quiz_description')}</Label>
             <Textarea id="description" {...form.register('description')} />
           </div>
         </CardContent>
@@ -167,15 +169,15 @@ export default function QuizEditor({
       {fields.map((field, index) => (
         <Card key={field.id}>
           <CardHeader>
-            <CardTitle>Question {index + 1}</CardTitle>
+            <CardTitle>{t('quiz_question')} {index + 1}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Prompt</Label>
+              <Label>{t('quiz_prompt')}</Label>
               <Textarea {...form.register(`questions.${index}.prompt` as const)} />
             </div>
             <div className="space-y-2">
-              <Label>Options</Label>
+              <Label>{t('quiz_options')}</Label>
               <div className="space-y-2">
                 {form.watch(`questions.${index}.options`).map((_, optionIndex) => (
                   <div key={optionIndex} className="flex gap-2">
@@ -190,7 +192,7 @@ export default function QuizEditor({
                         })
                       }
                     >
-                      Correct
+                      {t('quiz_correct')}
                     </Button>
                     {form.watch(`questions.${index}.options`).length > 2 && (
                       <Button
@@ -205,7 +207,7 @@ export default function QuizEditor({
                           }
                         }}
                       >
-                        Remove
+                        {t('quiz_remove')}
                       </Button>
                     )}
                   </div>
@@ -219,14 +221,14 @@ export default function QuizEditor({
                       form.setValue(`questions.${index}.options`, options, { shouldDirty: true })
                     }}
                   >
-                    Add option
+                    {t('quiz_add_option')}
                   </Button>
                 )}
               </div>
             </div>
             <div className="flex flex-wrap gap-4">
               <div className="space-y-2">
-                <Label>Time limit (sec)</Label>
+                <Label>{t('quiz_time_limit')}</Label>
                 <Input
                   type="number"
                   min={5}
@@ -236,7 +238,7 @@ export default function QuizEditor({
               </div>
               <div className="flex items-end">
                 <Button type="button" variant="destructive" onClick={() => remove(index)}>
-                  Delete question
+                  {t('quiz_delete_question')}
                 </Button>
               </div>
             </div>
@@ -257,9 +259,9 @@ export default function QuizEditor({
             })
           }
         >
-          Add question
+          {t('quiz_add_question')}
         </Button>
-        <Button type="submit">Save quiz</Button>
+        <Button type="submit">{t('quiz_save')}</Button>
       </div>
     </form>
   )

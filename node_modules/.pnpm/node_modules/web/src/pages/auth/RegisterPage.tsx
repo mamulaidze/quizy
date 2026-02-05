@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
+import { useI18n } from '@/lib/i18n'
 
 const schema = z.object({
   email: z.string().email(),
@@ -19,6 +20,7 @@ type FormValues = z.infer<typeof schema>
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const { t } = useI18n()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { email: '', password: '' }
@@ -42,31 +44,31 @@ export default function RegisterPage() {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <Card className="glass-card rounded-3xl">
         <CardHeader>
-          <CardTitle>Create account</CardTitle>
+          <CardTitle>{t('auth_create')}</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('auth_email')}</Label>
               <Input id="email" type="email" {...form.register('email')} />
               {form.formState.errors.email && (
                 <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('auth_password')}</Label>
               <Input id="password" type="password" {...form.register('password')} />
               {form.formState.errors.password && (
                 <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
               )}
             </div>
             <Button type="submit" className="w-full">
-              Create account
+              {t('auth_create')}
             </Button>
           </form>
           <div className="mt-4 text-sm">
             <Link to="/auth/login" className="text-primary">
-              Already have an account? Sign in
+              {t('auth_already')}
             </Link>
           </div>
         </CardContent>

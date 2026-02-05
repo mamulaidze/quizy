@@ -148,3 +148,6 @@ body {
 .dark .glass {
   background: rgba(16, 24, 39, 0.6);
 }
+html {
+  scroll-behavior: smooth;
+}

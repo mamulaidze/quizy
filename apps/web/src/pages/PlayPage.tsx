@@ -13,6 +13,7 @@ import type { Session, Team, Participant } from '@/types/db'
 import { toast } from 'sonner'
 import { LoadingDots } from '@/components/LoadingDots'
 import { AlertBanner } from '@/components/AlertBanner'
+import { useI18n } from '@/lib/i18n'
 
 export default function PlayPage() {
   const { code } = useParams()
@@ -23,6 +24,7 @@ export default function PlayPage() {
   const [hasAnswered, setHasAnswered] = React.useState(false)
   const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null)
   const reduceMotion = useReducedMotion()
+  const { t } = useI18n()
 
   const sessionQuery = useQuery({
     queryKey: ['session', code],
@@ -65,8 +67,15 @@ export default function PlayPage() {
   const joinSession = async () => {
     if (!sessionId || !nickname.trim() || participantId || joining) return
     if (teamsQuery.data?.length && !selectedTeamId) {
-      toast.error('Pick a team first')
+      toast.error(t('pick_team_first'))
       return
+    }
+    if (session?.team_max_members && selectedTeamId) {
+      const count = participants.filter((p) => p.team_id === selectedTeamId).length
+      if (count >= session.team_max_members) {
+        toast.error(t('team_full'))
+        return
+      }
     }
     setJoining(true)
     const existing = await supabase
@@ -83,18 +92,17 @@ export default function PlayPage() {
       return
     }
 
-    const { data, error } = await supabase
-      .from('participants')
-      .insert({
-        session_id: sessionId,
-        nickname: nickname.trim(),
-        score: 0,
-        team_id: selectedTeamId
-      })
-      .select('*')
-      .single()
+    const { data, error } = await supabase.rpc('join_team', {
+      p_session_id: sessionId,
+      p_nickname: nickname.trim(),
+      p_team_id: selectedTeamId
+    })
     setJoining(false)
     if (error || !data) {
+      if (error?.message?.toLowerCase().includes('team_full')) {
+        toast.error(t('team_full'))
+        return
+      }
       if (error?.message?.toLowerCase().includes('participants_unique_nickname_idx')) {
         toast.error('Nickname already taken. Choose another.')
       } else {
@@ -156,6 +164,18 @@ export default function PlayPage() {
   const sortedParticipants = React.useMemo(() => {
     return [...participants].sort((a, b) => b.score - a.score)
   }, [participants])
+  const podium = sortedParticipants.slice(0, 3)
+  const teamLeaderboard = React.useMemo(() => {
+    if (!teamsQuery.data || teamsQuery.data.length === 0) return []
+    return teamsQuery.data
+      .map((team) => ({
+        ...team,
+        score: participants.filter((p) => p.team_id === team.id).reduce((sum, p) => sum + p.score, 0),
+        members: participants.filter((p) => p.team_id === team.id).length
+      }))
+      .sort((a, b) => b.score - a.score)
+  }, [teamsQuery.data, participants])
+  const teamPodium = teamLeaderboard.slice(0, 3)
 
   const prevRanksRef = React.useRef<Record<string, number>>({})
   const rankedWithDelta = React.useMemo(() => {
@@ -177,10 +197,10 @@ export default function PlayPage() {
       <div className="mx-auto max-w-lg">
         <Card className="glass-card rounded-3xl">
           <CardHeader>
-            <CardTitle>Getting things ready…</CardTitle>
+            <CardTitle>{t('loading_joining')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <LoadingDots label="Joining session" />
+            <LoadingDots label={t('loading_joining')} />
           </CardContent>
         </Card>
       </div>
@@ -191,13 +211,13 @@ export default function PlayPage() {
     return (
       <div className="mx-auto max-w-lg">
         <AlertBanner
-          title="Could not join"
-          description="We hit an error loading this session. Please try again."
+          title={t('play_could_not_join')}
+          description={t('play_could_not_join_desc')}
           variant="error"
         />
         <div className="mt-4">
           <Button variant="secondary" onClick={() => window.location.reload()}>
-            Try again
+            {t('play_try_again')}
           </Button>
         </div>
       </div>
@@ -208,13 +228,13 @@ export default function PlayPage() {
     return (
       <div className="mx-auto max-w-lg">
         <AlertBanner
-          title="Game not found"
-          description="Double-check the code and try again."
+          title={t('play_game_not_found')}
+          description={t('play_game_not_found_desc')}
           variant="info"
         />
         <div className="mt-4">
           <Button variant="secondary" onClick={() => navigate('/join')}>
-            Back to join
+            {t('play_back_join')}
           </Button>
         </div>
       </div>
@@ -227,32 +247,46 @@ export default function PlayPage() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="glass-card rounded-3xl">
           <CardHeader>
-            <CardTitle>Choose a nickname</CardTitle>
+            <CardTitle>{t('play_choose_nickname')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Label htmlFor="nickname">Nickname</Label>
+            <Label htmlFor="nickname">{t('play_nickname')}</Label>
             <Input id="nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} />
             {teamsQuery.data && teamsQuery.data.length > 0 && (
               <div className="space-y-2">
-                <Label>Pick a team</Label>
+                <Label>{t('play_pick_team')}</Label>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {teamsQuery.data.map((team) => (
+                    (() => {
+                      const members = participants.filter((p) => p.team_id === team.id).length
+                      const full = session?.team_max_members ? members >= session.team_max_members : false
+                      return (
                     <button
                       key={team.id}
                       type="button"
                       className={`rounded-2xl border px-3 py-2 text-sm font-semibold text-white shadow ${
                         selectedTeamId === team.id ? 'glow-ring' : 'border-white/10'
-                      } bg-gradient-to-br ${team.color}`}
+                      } bg-gradient-to-br ${team.color} ${full ? 'opacity-50' : ''}`}
                       onClick={() => setSelectedTeamId(team.id)}
+                      disabled={full}
                     >
-                      {team.name}
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{team.name}</span>
+                        {session?.team_max_members ? (
+                          <span className="text-xs text-white/80">
+                            {members}/{session.team_max_members}
+                          </span>
+                        ) : null}
+                      </div>
                     </button>
+                      )
+                    })()
                   ))}
                 </div>
               </div>
             )}
             <Button className="w-full" onClick={submitNickname} disabled={joining}>
-              {joining ? 'Joining...' : 'Join lobby'}
+              {joining ? t('play_joining') : t('play_join')}
             </Button>
           </CardContent>
         </Card>
@@ -263,17 +297,17 @@ export default function PlayPage() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="glass-card rounded-3xl">
           <CardHeader>
-            <CardTitle>Waiting for host</CardTitle>
+            <CardTitle>{t('play_waiting')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-muted-foreground">Waiting for others 👀</p>
-            <div className="text-3xl font-bold tracking-widest">{session.code}</div>
+            <p className="text-muted-foreground">{t('play_waiting_others')}</p>
+            <div className="text-2xl font-bold tracking-widest sm:text-3xl">{session.code}</div>
             <div className="flex flex-wrap gap-2">
               {participants.map((p) => (
                 <Badge key={p.id}>{p.nickname}</Badge>
               ))}
             </div>
-            <LoadingDots label="Get ready…" />
+            <LoadingDots label={t('play_get_ready')} />
           </CardContent>
         </Card>
         </motion.div>
@@ -321,29 +355,55 @@ export default function PlayPage() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="glass-card rounded-3xl">
           <CardHeader>
-            <CardTitle>Results</CardTitle>
+            <CardTitle>{t('play_results')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-muted-foreground">Scores update live after each question.</p>
-            <motion.div layout className="space-y-2">
-              {rankedWithDelta.slice(0, 10).map((p) => (
-                <motion.div
-                  layout
-                  key={p.id}
-                  className={`flex items-center justify-between rounded-xl border border-white/10 p-3 ${
-                    p.id === participantId ? 'glow-ring' : ''
-                  }`}
-                >
-                  <span>
-                    {p.rank}. {p.nickname}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {p.delta > 0 ? `▲ +${p.delta}` : p.delta < 0 ? `▼ ${p.delta}` : '•'}
-                  </span>
-                  <span className="font-semibold">{p.score}</span>
-                </motion.div>
-              ))}
-            </motion.div>
+            <p className="text-muted-foreground">{t('play_scores_update')}</p>
+            {teamLeaderboard.length > 0 && (
+              <div className="mt-6 space-y-3">
+                <p className="text-sm text-muted-foreground">{t('host_team_leaderboard')}</p>
+                <div className="grid items-end gap-4 sm:grid-cols-3">
+                  {teamPodium[2] && (
+                    <div className="order-1 flex flex-col items-center gap-2 rounded-2xl border border-orange-400/20 bg-orange-400/10 px-4 pb-4 pt-3 text-center">
+                      <div className="text-xs uppercase tracking-[0.3em] text-orange-200">3rd</div>
+                      <div className="text-base font-semibold">{teamPodium[2].name}</div>
+                      <div className="text-xs text-muted-foreground">{teamPodium[2].score} pts</div>
+                      <div className="h-12 w-full rounded-2xl bg-gradient-to-b from-orange-300/70 to-orange-500/50" />
+                    </div>
+                  )}
+                  {teamPodium[0] && (
+                    <div className="order-2 flex flex-col items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 pb-4 pt-3 text-center shadow-[0_0_20px_rgba(251,191,36,0.3)]">
+                      <div className="text-xs uppercase tracking-[0.3em] text-amber-200">1st</div>
+                      <div className="text-lg font-semibold">{teamPodium[0].name}</div>
+                      <div className="text-xs text-amber-100/80">{teamPodium[0].score} pts</div>
+                      <div className="h-16 w-full rounded-2xl bg-gradient-to-b from-amber-300/80 to-amber-500/60" />
+                    </div>
+                  )}
+                  {teamPodium[1] && (
+                    <div className="order-3 flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-3 text-center">
+                      <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">2nd</div>
+                      <div className="text-base font-semibold">{teamPodium[1].name}</div>
+                      <div className="text-xs text-muted-foreground">{teamPodium[1].score} pts</div>
+                      <div className="h-12 w-full rounded-2xl bg-gradient-to-b from-slate-300/70 to-slate-500/50" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {teamLeaderboard.map((team, idx) => (
+                    <div key={team.id} className="flex items-center justify-between rounded-xl border border-white/10 p-3">
+                      <span>
+                        {idx + 1}. {team.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {team.members}
+                        {session?.team_max_members ? `/${session.team_max_members}` : ''} members
+                      </span>
+                      <span className="font-semibold">{team.score}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
         </motion.div>
@@ -353,24 +413,57 @@ export default function PlayPage() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="glass-card rounded-3xl">
           <CardHeader>
-            <CardTitle>Game over</CardTitle>
+            <CardTitle>{t('play_game_over')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-muted-foreground">Thanks for playing!</p>
-            <div className="space-y-2">
-              {[...participants]
-                .sort((a, b) => b.score - a.score)
-                .map((p, idx) => (
-                  <div key={p.id} className={`flex items-center justify-between rounded-xl border border-white/10 p-3 ${p.id === participantId ? 'glow-ring' : ''}`}>
-                    <span>
-                      {idx + 1}. {p.nickname}
-                    </span>
-                    <span className="font-semibold">{p.score}</span>
-                  </div>
-                ))}
-            </div>
+            <p className="text-muted-foreground">{t('play_thanks')}</p>
+            {teamLeaderboard.length > 0 && (
+              <div className="mt-6 space-y-3">
+                <p className="text-sm text-muted-foreground">{t('host_team_leaderboard')}</p>
+                <div className="grid items-end gap-4 sm:grid-cols-3">
+                  {teamPodium[2] && (
+                    <div className="order-1 flex flex-col items-center gap-2 rounded-2xl border border-orange-400/20 bg-orange-400/10 px-4 pb-4 pt-3 text-center">
+                      <div className="text-xs uppercase tracking-[0.3em] text-orange-200">3rd</div>
+                      <div className="text-base font-semibold">{teamPodium[2].name}</div>
+                      <div className="text-xs text-muted-foreground">{teamPodium[2].score} pts</div>
+                      <div className="h-12 w-full rounded-2xl bg-gradient-to-b from-orange-300/70 to-orange-500/50" />
+                    </div>
+                  )}
+                  {teamPodium[0] && (
+                    <div className="order-2 flex flex-col items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 pb-4 pt-3 text-center shadow-[0_0_20px_rgba(251,191,36,0.3)]">
+                      <div className="text-xs uppercase tracking-[0.3em] text-amber-200">1st</div>
+                      <div className="text-lg font-semibold">{teamPodium[0].name}</div>
+                      <div className="text-xs text-amber-100/80">{teamPodium[0].score} pts</div>
+                      <div className="h-16 w-full rounded-2xl bg-gradient-to-b from-amber-300/80 to-amber-500/60" />
+                    </div>
+                  )}
+                  {teamPodium[1] && (
+                    <div className="order-3 flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-3 text-center">
+                      <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">2nd</div>
+                      <div className="text-base font-semibold">{teamPodium[1].name}</div>
+                      <div className="text-xs text-muted-foreground">{teamPodium[1].score} pts</div>
+                      <div className="h-12 w-full rounded-2xl bg-gradient-to-b from-slate-300/70 to-slate-500/50" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {teamLeaderboard.map((team, idx) => (
+                    <div key={team.id} className="flex items-center justify-between rounded-xl border border-white/10 p-3">
+                      <span>
+                        {idx + 1}. {team.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {team.members}
+                        {session?.team_max_members ? `/${session.team_max_members}` : ''} members
+                      </span>
+                      <span className="font-semibold">{team.score}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <Button variant="secondary" onClick={() => navigate('/join')}>
-              Join another game
+              {t('play_join_another')}
             </Button>
           </CardContent>
         </Card>
