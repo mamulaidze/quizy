@@ -405,7 +405,7 @@ export default function HostPage() {
               </div>
               <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-3">
                 {qrValue ? (
-                  <QRCodeSVG value={qrValue} size={180} />
+                  <QRCodeSVG value={qrValue} size={180} fgColor="#0f172a" bgColor="#ffffff" />
                 ) : (
                   <p className="text-xs text-muted-foreground">{t('loading_session')}</p>
                 )}
@@ -723,7 +723,7 @@ export default function HostPage() {
           </div>
           <div className="mt-6 flex flex-col items-center gap-5">
             <div className="rounded-2xl bg-white p-4 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-              <QRCodeSVG value={qrValue} size={qrSize} />
+              <QRCodeSVG value={qrValue} size={qrSize} fgColor="#0f172a" bgColor="#ffffff" />
             </div>
             <div className="w-full space-y-2">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
