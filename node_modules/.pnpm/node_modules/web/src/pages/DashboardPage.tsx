@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { supabase } from '@/lib/supabase'
 import { generateCode } from '@/lib/code'
 import { useAuth } from '@/lib/auth'
@@ -11,16 +12,20 @@ import { useI18n } from '@/lib/i18n'
 import { toast } from 'sonner'
 import type { Quiz } from '@/types/db'
 import React from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { LoadingDots } from '@/components/LoadingDots'
 import { EmptyState } from '@/components/EmptyState'
+import { Calendar, Clock, MoreVertical, Plus, Search, Users } from 'lucide-react'
 
 export default function DashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { t } = useI18n()
+  const reduceMotion = useReducedMotion()
   const [search, setSearch] = React.useState('')
+  const [filterTeamsOnly, setFilterTeamsOnly] = React.useState(false)
+  const [deleteTarget, setDeleteTarget] = React.useState<Quiz | null>(null)
   const [teamsRequiredByQuiz, setTeamsRequiredByQuiz] = React.useState<Record<string, boolean>>({})
   const [teamConfigsByQuiz, setTeamConfigsByQuiz] = React.useState<
     Record<string, { name: string; color: string }[]>
@@ -94,9 +99,52 @@ export default function DashboardPage() {
     }
   })
 
-  const filtered = (data ?? []).filter((quiz) =>
-    quiz.title.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = (data ?? []).filter((quiz) => {
+    const matchesSearch = quiz.title.toLowerCase().includes(search.toLowerCase())
+    const matchesTeams = filterTeamsOnly ? !!teamsRequiredByQuiz[quiz.id] : true
+    return matchesSearch && matchesTeams
+  })
+
+  const questionsByQuizQuery = useQuery({
+    queryKey: ['questions-per-quiz', data?.length ?? 0],
+    enabled: !!data && data.length > 0,
+    queryFn: async () => {
+      const { data: questions, error } = await supabase.from('questions').select('quiz_id')
+      if (error) throw error
+      return (questions ?? []).reduce<Record<string, number>>((acc, q) => {
+        acc[q.quiz_id] = (acc[q.quiz_id] ?? 0) + 1
+        return acc
+      }, {})
+    }
+  })
+
+  const sessionsQuery = useQuery({
+    queryKey: ['sessions-metrics', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data: sessions, error, count } = await supabase
+        .from('sessions')
+        .select('id,created_at', { count: 'exact' })
+        .eq('host_id', user?.id)
+      if (error) throw error
+      return { sessions: sessions ?? [], count: count ?? 0 }
+    }
+  })
+
+  const participantsQuery = useQuery({
+    queryKey: ['participants-metrics', sessionsQuery.data?.sessions?.length ?? 0],
+    enabled: !!sessionsQuery.data?.sessions?.length,
+    queryFn: async () => {
+      const sessionIds = sessionsQuery.data?.sessions.map((s) => s.id) ?? []
+      if (sessionIds.length === 0) return { count: 0 }
+      const { count, error } = await supabase
+        .from('participants')
+        .select('id', { count: 'exact' })
+        .in('session_id', sessionIds)
+      if (error) throw error
+      return { count: count ?? 0 }
+    }
+  })
 
   React.useEffect(() => {
     if (!data) return
@@ -231,23 +279,54 @@ export default function DashboardPage() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold sm:text-3xl">{t('dashboard_title')}</h1>
-          <p className="text-muted-foreground">{t('dashboard_subtitle')}</p>
-        </div>
-        <Button asChild>
-          <Link to="/quizzes/new">{t('dashboard_new_quiz')}</Link>
-        </Button>
-      </div>
+    <motion.div
+      initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="space-y-6"
+    >
+      <DashboardHeader
+        title={t('dashboard_title')}
+        subtitle={t('dashboard_subtitle')}
+        onNew={() => navigate('/quizzes/new')}
+        newLabel={t('dashboard_new_quiz')}
+        importLabel={t('dashboard_import')}
+      />
+      <StatsRow
+        totalQuizzes={data?.length ?? 0}
+        totalSessions={sessionsQuery.data?.count ?? 0}
+        totalPlayers={participantsQuery.data?.count ?? 0}
+        lastActivity={
+          sessionsQuery.data?.sessions?.[0]?.created_at ??
+          data?.[0]?.created_at ??
+          null
+        }
+        reduceMotion={reduceMotion}
+        labels={{
+          quizzes: t('dashboard_stat_quizzes'),
+          sessions: t('dashboard_stat_sessions'),
+          players: t('dashboard_stat_players'),
+          last: t('dashboard_stat_last')
+        }}
+      />
 
-      <div className="flex items-center gap-3">
-        <Input
-          placeholder={t('dashboard_search')}
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder={t('dashboard_search')}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Button
+          variant={filterTeamsOnly ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setFilterTeamsOnly((prev) => !prev)}
+        >
+          {t('dashboard_filter_teams')}
+        </Button>
       </div>
 
       {isLoading ? (
@@ -262,66 +341,63 @@ export default function DashboardPage() {
           onAction={() => navigate('/quizzes/new')}
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((quiz) => (
-            <Card key={quiz.id} className="glass-card rounded-3xl">
-              <CardHeader>
-                <CardTitle>{quiz.title}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">{quiz.description ?? t('dashboard_no_desc')}</p>
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">{t('teams_required')}</p>
-                      <p className="text-xs text-muted-foreground">{t('teams_required_desc')}</p>
-                    </div>
-                    <Switch
-                      checked={teamsRequiredByQuiz[quiz.id] ?? false}
-                      onCheckedChange={async (checked) => {
-                        setTeamsRequiredByQuiz((prev) => ({ ...prev, [quiz.id]: checked }))
-                        if (!checked) {
-                          setTeamConfigsByQuiz((prev) => ({ ...prev, [quiz.id]: [] }))
-                          await persistTeamSettings(quiz.id, { teams_config: [], team_max_members: null })
-                          setTeamSettingsQuizId(null)
-                        } else {
-                          const requestedCount = teamCountByQuiz[quiz.id] ?? 4
-                          const config = generateTeams(requestedCount)
-                          setTeamConfigsByQuiz((prev) => ({ ...prev, [quiz.id]: config }))
-                          await persistTeamSettings(quiz.id, {
-                            teams_config: normalizeTeams(config),
-                            team_max_members: teamMaxByQuiz[quiz.id] ?? 8
-                          })
-                          setTeamSettingsQuizId(quiz.id)
-                        }
-                      }}
-                    />
-                  </div>
-                  {teamsRequiredByQuiz[quiz.id] && (
-                    <div className="mt-3">
-                      <Button size="sm" variant="secondary" onClick={() => setTeamSettingsQuizId(quiz.id)}>
-                        {t('teams_edit')}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => startSession(quiz.id, teamsRequiredByQuiz[quiz.id] ?? false)}>
-                    {t('dashboard_host')}
-                  </Button>
-                  <Button size="sm" variant="outline" asChild>
-                    <Link to={`/quizzes/${quiz.id}/edit`}>{t('dashboard_edit')}</Link>
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={() => duplicateQuiz(quiz)}>
-                    {t('dashboard_duplicate')}
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => deleteQuiz(quiz.id)}>
-                    {t('dashboard_delete')}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <QuizCard
+              key={quiz.id}
+              quiz={quiz}
+              questionsCount={(questionsByQuizQuery.data ?? {})[quiz.id] ?? 0}
+              teamsRequired={teamsRequiredByQuiz[quiz.id] ?? false}
+              onToggleTeams={async (checked) => {
+                setTeamsRequiredByQuiz((prev) => ({ ...prev, [quiz.id]: checked }))
+                if (!checked) {
+                  setTeamConfigsByQuiz((prev) => ({ ...prev, [quiz.id]: [] }))
+                  await persistTeamSettings(quiz.id, { teams_config: [], team_max_members: null })
+                  setTeamSettingsQuizId(null)
+                } else {
+                  const requestedCount = teamCountByQuiz[quiz.id] ?? 4
+                  const config = generateTeams(requestedCount)
+                  setTeamConfigsByQuiz((prev) => ({ ...prev, [quiz.id]: config }))
+                  await persistTeamSettings(quiz.id, {
+                    teams_config: normalizeTeams(config),
+                    team_max_members: teamMaxByQuiz[quiz.id] ?? 8
+                  })
+                  setTeamSettingsQuizId(quiz.id)
+                }
+              }}
+              onEdit={() => navigate(`/quizzes/${quiz.id}/edit`)}
+              onHost={() => startSession(quiz.id, teamsRequiredByQuiz[quiz.id] ?? false)}
+              onDuplicate={() => duplicateQuiz(quiz)}
+              onDelete={() => setDeleteTarget(quiz)}
+              onTeamsSettings={() => setTeamSettingsQuizId(quiz.id)}
+            />
           ))}
+        </div>
+      )}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950/90 p-6 shadow-2xl backdrop-blur">
+            <div className="space-y-2">
+              <p className="text-lg font-semibold">{t('dashboard_delete_title')}</p>
+              <p className="text-sm text-muted-foreground">
+                {t('dashboard_delete_desc')} <span className="text-foreground">{deleteTarget.title}</span>
+              </p>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+                {t('dashboard_cancel')}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  await deleteQuiz(deleteTarget.id)
+                  setDeleteTarget(null)
+                }}
+              >
+                {t('dashboard_confirm_delete')}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
       {teamSettingsQuizId && (
@@ -455,4 +531,204 @@ export default function DashboardPage() {
       )}
     </motion.div>
   )
+}
+
+function DashboardHeader({
+  title,
+  subtitle,
+  onNew,
+  newLabel,
+  importLabel
+}: {
+  title: string
+  subtitle: string
+  onNew: () => void
+  newLabel: string
+  importLabel: string
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
+        <p className="text-muted-foreground">{subtitle}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" size="sm" disabled>
+          {importLabel}
+        </Button>
+        <Button onClick={onNew}>
+          <Plus className="mr-2 h-4 w-4" />
+          {newLabel}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function StatsRow({
+  totalQuizzes,
+  totalSessions,
+  totalPlayers,
+  lastActivity,
+  reduceMotion,
+  labels
+}: {
+  totalQuizzes: number
+  totalSessions: number
+  totalPlayers: number
+  lastActivity: string | null
+  reduceMotion: boolean
+  labels: { quizzes: string; sessions: string; players: string; last: string }
+}) {
+  const stats = [
+    { label: labels.quizzes, value: totalQuizzes, icon: Calendar },
+    { label: labels.sessions, value: totalSessions, icon: Clock },
+    { label: labels.players, value: totalPlayers, icon: Users }
+  ]
+  const last = lastActivity ? new Date(lastActivity).toLocaleDateString() : '—'
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {stats.map((stat, idx) => (
+        <motion.div
+          key={stat.label}
+          initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+          transition={{ delay: reduceMotion ? 0 : idx * 0.05 }}
+          className="rounded-2xl border border-white/10 bg-white/5 p-4"
+        >
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <stat.icon className="h-4 w-4" />
+            {stat.label}
+          </div>
+          <div className="mt-2 text-2xl font-semibold">{useCountUp(stat.value, reduceMotion)}</div>
+        </motion.div>
+      ))}
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Clock className="h-4 w-4" />
+          {labels.last}
+        </div>
+        <div className="mt-2 text-2xl font-semibold">{last}</div>
+      </div>
+    </div>
+  )
+}
+
+function QuizCard({
+  quiz,
+  questionsCount,
+  teamsRequired,
+  onToggleTeams,
+  onEdit,
+  onHost,
+  onDuplicate,
+  onDelete,
+  onTeamsSettings
+}: {
+  quiz: Quiz
+  questionsCount: number
+  teamsRequired: boolean
+  onToggleTeams: (checked: boolean) => void
+  onEdit: () => void
+  onHost: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+  onTeamsSettings: () => void
+}) {
+  const { t } = useI18n()
+  return (
+    <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
+      <Card className="glass-card rounded-2xl border border-white/10">
+        <CardHeader>
+          <CardTitle className="text-lg">{quiz.title}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">{quiz.description ?? t('dashboard_no_desc')}</p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              {questionsCount} {t('dashboard_meta_questions')}
+            </span>
+            <span>•</span>
+            <span>{new Date(quiz.created_at).toLocaleDateString()}</span>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">{t('teams_required')}</p>
+                <p className="text-xs text-muted-foreground">{t('teams_required_desc')}</p>
+              </div>
+              <Switch checked={teamsRequired} onCheckedChange={onToggleTeams} />
+            </div>
+            {teamsRequired && (
+              <div className="mt-3">
+                <Button size="sm" variant="secondary" onClick={onTeamsSettings}>
+                  {t('teams_edit')}
+                </Button>
+              </div>
+            )}
+          </div>
+          <QuizActions onHost={onHost} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} />
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
+function QuizActions({
+  onHost,
+  onEdit,
+  onDuplicate,
+  onDelete
+}: {
+  onHost: () => void
+  onEdit: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+}) {
+  const { t } = useI18n()
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button size="sm" onClick={onHost}>
+        {t('dashboard_host')}
+      </Button>
+      <Button size="sm" variant="outline" onClick={onEdit}>
+        {t('dashboard_edit')}
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="ghost" aria-label="More actions">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onDuplicate}>{t('dashboard_duplicate')}</DropdownMenuItem>
+          <DropdownMenuItem onClick={onDelete}>{t('dashboard_delete')}</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+}
+
+function useCountUp(value: number, reduceMotion: boolean) {
+  const [display, setDisplay] = React.useState(value)
+
+  React.useEffect(() => {
+    if (reduceMotion) {
+      setDisplay(value)
+      return
+    }
+    let frameId = 0
+    const start = performance.now()
+    const duration = 700
+    const from = display
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration)
+      setDisplay(Math.round(from + (value - from) * progress))
+      if (progress < 1) frameId = requestAnimationFrame(tick)
+    }
+    frameId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frameId)
+  }, [value, reduceMotion])
+
+  return display
 }

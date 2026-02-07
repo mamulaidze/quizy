@@ -128,6 +128,21 @@ body {
   }
 }
 
+@keyframes timer-linear {
+  from {
+    transform: scaleX(var(--from));
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.timer-bar-animate {
+  animation-name: timer-linear;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .answer-btn:hover {
     transform: none;

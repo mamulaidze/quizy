@@ -36,12 +36,12 @@ export default function EditQuizPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold sm:text-3xl">{t('quiz_edit')}</h1>
-        <p className="text-muted-foreground">{t('quiz_autosaved')}</p>
-      </div>
-      <QuizEditor quiz={data.quiz} questions={data.questions} />
-    </div>
+    <QuizEditor
+      quiz={data.quiz}
+      questions={data.questions}
+      headerTitle={t('quiz_edit')}
+      headerSubtitle={t('quiz_autosaved')}
+      badgeLabel="Live draft"
+    />
   )
 }

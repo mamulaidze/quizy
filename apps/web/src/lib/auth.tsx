@@ -29,9 +29,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     let isMounted = true
+    const getStoredLanguage = () => {
+      if (typeof window === 'undefined') return 'en' as const
+      const stored = window.localStorage.getItem('language')
+      return stored === 'ka' ? 'ka' : 'en'
+    }
     const loadProfile = async (user: User | null) => {
       if (!user) {
-        return 'en' as const
+        return getStoredLanguage()
       }
       const { data: profile } = await supabase
         .from('profiles')
@@ -47,6 +52,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const setLanguage = async (language: 'en' | 'ka') => {
       setState((prev) => ({ ...prev, language }))
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('language', language)
+      }
       const { data } = await supabase.auth.getUser()
       if (!data.user) return
       await supabase.from('profiles').update({ language }).eq('id', data.user.id)
