@@ -217,7 +217,19 @@ export default function HostPage() {
         .eq('id', update.participantId)
     }
 
-    await supabase.from('sessions').update({ status: 'results' }).eq('id', session.id)
+    await supabase
+      .from('sessions')
+      .update({
+        status: 'results',
+        public_question: {
+          question_id: currentQuestion.id,
+          prompt: currentQuestion.prompt,
+          options: currentQuestion.options,
+          time_limit_sec: currentQuestion.time_limit_sec,
+          correct_index: currentQuestion.correct_index
+        }
+      })
+      .eq('id', session.id)
   }
 
   const nextQuestion = async () => {
@@ -325,6 +337,8 @@ export default function HostPage() {
       })()
     : null
 
+  const joinUrl = typeof window === 'undefined' ? '' : `${window.location.origin}/play/${session.code}`
+
   return (
     <>
     <div className="space-y-6">
@@ -375,7 +389,7 @@ export default function HostPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-4 rounded-xl px-1 py-1">
+            <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5">
                   <QrCode className="h-5 w-5 text-muted-foreground" />
@@ -385,9 +399,19 @@ export default function HostPage() {
                   <p className="text-xs text-muted-foreground">{t('host_qr_desc')}</p>
                 </div>
               </div>
-              <Button size="sm" variant="secondary" onClick={() => setQrOpen(true)}>
-                {t('host_show_qr')}
-              </Button>
+              <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-3">
+                {joinUrl ? (
+                  <QRCodeSVG value={joinUrl} size={180} />
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t('loading_session')}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span>{joinUrl}</span>
+                <Button size="sm" variant="secondary" onClick={() => setQrOpen(true)}>
+                  {t('host_show_qr')}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -695,7 +719,7 @@ export default function HostPage() {
           </div>
           <div className="mt-6 flex flex-col items-center gap-5">
             <div className="rounded-2xl bg-white p-4 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-              <QRCodeSVG value={`${window.location.origin}/play/${session.code}`} size={qrSize} />
+              <QRCodeSVG value={joinUrl} size={qrSize} />
             </div>
             <div className="w-full space-y-2">
               <div className="flex items-center justify-between text-xs text-muted-foreground">

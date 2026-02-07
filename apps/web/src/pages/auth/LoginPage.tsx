@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { useI18n } from '@/lib/i18n'
+import { useAuth } from '@/lib/auth'
 
 const schema = z.object({
   email: z.string().email(),
@@ -21,10 +23,17 @@ type FormValues = z.infer<typeof schema>
 export default function LoginPage() {
   const navigate = useNavigate()
   const { t } = useI18n()
+  const { user, loading } = useAuth()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { email: '', password: '' }
   })
+
+  useEffect(() => {
+    if (!loading && user) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [loading, user, navigate])
 
   const onSubmit = async (values: FormValues) => {
     const { error } = await supabase.auth.signInWithPassword({

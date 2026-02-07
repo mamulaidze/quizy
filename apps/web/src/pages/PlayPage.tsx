@@ -23,6 +23,7 @@ export default function PlayPage() {
   const [joining, setJoining] = React.useState(false)
   const [hasAnswered, setHasAnswered] = React.useState(false)
   const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null)
+  const [lastAnswerIndex, setLastAnswerIndex] = React.useState<number | null>(null)
   const reduceMotion = useReducedMotion()
   const { t } = useI18n()
 
@@ -45,6 +46,26 @@ export default function PlayPage() {
       const { data, error } = await supabase.from('teams').select('*').eq('session_id', sessionId)
       if (error) throw error
       return data as Team[]
+    }
+  })
+
+  const answerResultQuery = useQuery({
+    queryKey: ['answer', sessionId, participantId, session?.public_question?.question_id, session?.status],
+    enabled:
+      !!sessionId &&
+      !!participantId &&
+      !!session?.public_question?.question_id &&
+      session?.status === 'results',
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('answers')
+        .select('selected_index,is_correct,awarded_points')
+        .eq('session_id', sessionId)
+        .eq('participant_id', participantId)
+        .eq('question_id', session?.public_question?.question_id)
+        .maybeSingle()
+      if (error) throw error
+      return data
     }
   })
 
@@ -119,6 +140,7 @@ export default function PlayPage() {
 
   React.useEffect(() => {
     setHasAnswered(false)
+    setLastAnswerIndex(null)
   }, [session?.current_question_idx, session?.status])
 
   const submitNickname = async () => {
@@ -144,6 +166,7 @@ export default function PlayPage() {
       return
     }
     setHasAnswered(true)
+    setLastAnswerIndex(index)
   }
 
   const optionColors = [
@@ -358,6 +381,45 @@ export default function PlayPage() {
             <CardTitle>{t('play_results')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm">
+              {answerResultQuery.isLoading && <p className="text-muted-foreground">{t('loading_session')}</p>}
+              {!answerResultQuery.isLoading && !answerResultQuery.data && (
+                <p className="text-muted-foreground">{t('play_no_answer')}</p>
+              )}
+              {answerResultQuery.data && (
+                <div className="space-y-1">
+                  <p className={answerResultQuery.data.is_correct ? 'text-emerald-300' : 'text-rose-300'}>
+                    {answerResultQuery.data.is_correct ? t('play_answer_correct') : t('play_answer_wrong')}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {t('play_answer_points')} {answerResultQuery.data.awarded_points ?? 0}
+                  </p>
+                  {typeof answerResultQuery.data.selected_index === 'number' && (
+                    <p className="text-muted-foreground">
+                      {t('play_answer_choice')} {answerResultQuery.data.selected_index + 1}
+                    </p>
+                  )}
+                </div>
+              )}
+              {!answerResultQuery.data && lastAnswerIndex !== null && (
+                <div className="space-y-1">
+                  {typeof session.public_question?.correct_index === 'number' && (
+                    <p
+                      className={
+                        lastAnswerIndex === session.public_question.correct_index ? 'text-emerald-300' : 'text-rose-300'
+                      }
+                    >
+                      {lastAnswerIndex === session.public_question.correct_index
+                        ? t('play_answer_correct')
+                        : t('play_answer_wrong')}
+                    </p>
+                  )}
+                  <p className="text-muted-foreground">
+                    {t('play_answer_choice')} {lastAnswerIndex + 1}
+                  </p>
+                </div>
+              )}
+            </div>
             <p className="text-muted-foreground">{t('play_scores_update')}</p>
             {teamLeaderboard.length > 0 && (
               <div className="mt-6 space-y-3">
